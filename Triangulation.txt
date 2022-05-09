@@ -1,0 +1,248 @@
+/*
+Three antennas are connected to an Arduino. Antenna 1 is in the middle, 2 left and 3 right. The antenna 1 sends out a signal and it is meassured how long 
+it takes the signal to reach the other two antennas, next antenna 2 sends out a signal and the time is meassured till the signal reaches antenna 3. With 
+the speed of em-waves in air the distances between the antennas can be canlulated and with the sinefunction the angels can be calculated. With these the 
+coordinates of the antennas can be calculated. When this is finished the Arduino shall check the whole time if any signal is send in binary. If a signal 
+is received, the send message is copied into a table with the calculated origin of the signal.
+*/
+int identifier[100]; //Arduino has no lists, so an array is used//
+float ycoord[100]; //it is onedimensional, because everything should have the same index and you should be able to easily check for a specific value//
+float xcoord[100];
+
+bool receiv = false;
+
+int counter;
+int counter2;
+int index;
+int antx1=0; //these are the coordinates of the first antenna, they are not used for calculation, but as reference, so that the calculations work//
+int anty1=0;
+
+unsigned long spdemair= 200000000;//meters per second//
+
+float lenght1; //at the beginning these are used for the lenght between the antennas, then between the antennas and the signalorigin//
+float lenght2; //because an Arduino Uno is used, there is no persion gain with double, so float is used//
+float lenght3;
+float anty2; //coordinates of the other 2 antennas//
+float antx2;
+float anty3;
+float antx3;
+float pi = 3.14159265;
+float loss1; //voltage losses//
+float loss2;
+float loss3;
+float freqenz=0.125;
+
+#include Math.h;
+
+void setup() {
+  pinMode(A0,OUTPUT); //antenna 1//
+  pinMode(A1,INPUT);
+  pinMode(A2,INPUT); //antenna 2//
+  pinMode(A3,OUTPUT);
+  pinMode(A4,INPUT); //antenna 3//
+  counter = 0;
+  analogWrite(A0,1023);
+  unsigned long startTime = micros(); //meassures the time in ms, it starts with the program//
+  float timecable =0.6/(0.8*3*10^8); //0.6 is the cablelength in meter and divider is the estimated speed of power in copper//
+  //it's meassured till the signal is received//
+  while (receiv==false)
+  {
+    if (analogRead(A2)>=511) //between 1 and 2//
+    {
+      unsigned long time1 = micros();
+      lenght1 = ((float)time1-(float)startTime-timecable)*(float)spdemair/1000.0; //Meassured time minus the time the signal takes through the cable and the starttime. Then we have the traveltime between the two antennas and we can calculate the distance//
+      counter++;
+    }
+    if (analogRead(A4)>=511) //between 1 and 3//
+    {
+      unsigned long time2 = micros();
+      lenght2 = ((float)time2-(float)startTim-(float)timecablee)*(float)spdemair/1000.0;
+      counter++;
+    }
+    if(counter==2)
+    {
+      receiv=true;
+    }
+  }
+  while (receiv==true)
+  {
+      if (analogRead(A4)>=511) //between 2 and 3//
+    {
+      unsigned long time3 = micros();
+      lenght3 = ((float)time3-(float)time2-2.0*(float)timecable)*(float)spdemair/1000.0; //double due to way to and from antenna//
+      counter++;
+    }
+    if(counter==3)
+    {
+      receiv=false;
+      counter=0;
+    }
+  }
+  calcantposit(length1, length2, length3);
+  index=0;
+}
+
+void loop()
+{
+  int d =analogRead(A1);
+  int e =analogRead(A2);
+  int f =analogRead(A4);
+  int bit1;
+  int sgnumber;
+  if (d||e||f!=0)
+  {
+    while (counter2<24)
+    {
+      if (d!=0)
+      {
+        loss1=calcdB(d);
+        bit1=identval(d);
+        sgnumber+=calcmsg(bit1,counter);
+        counter++;
+        length1=calcdistance(frequenz,loss1);
+        counter2++;
+      }
+      if (e!=0)
+      {
+        loss2=calcdB(e);
+        length2=calcdistance(frequenz,loss2);
+        counter2++;
+      }
+      if (f!=0)
+      {
+        loss3=calcdB(f);
+        length3=calcdistance(frequenz,loss3);
+        counter2++;
+      }
+    }
+  }
+  if(index==100)
+  {
+    index=0;
+  }
+  calcposition( length1, length2, length3, antx2, anty2, antx3, anty3);
+  identifier[index]=sgnumber;
+  index++;
+}
+float calcdB(int x) //This calculates the loss, its unit is decibel, because only the ration changes on these short areas, so phenomena from relativity can be ignored//
+{
+  int diff;
+  float dB;
+  if(x>512)
+  {
+    diff=511-y+512;
+  }
+  else
+  {
+    diff=511-x;
+  }
+  dB =20.0*log10((float)((1023-diff)/1023));
+  return dB;
+}
+
+float calcdistance(float ghz, float loss) //this function calculates the distance from with the signal is send to the antenna//
+{
+  float dist;
+  dist = sqrt((9.0*loss)/(4.0*pi*10*ghz)^2.0);
+  return dist;
+}
+
+int identval(int val) //this function is used to identify the bit of the signal//
+{
+  int bin; //an integer is chosen to make calculation easier, because then no conversion is needed//
+  if(val <= 511)
+  {
+    bin=0;
+  }
+  else
+  {
+    bin=1;
+  }
+  return bin;
+}
+
+int calcmsg(int binbit, int count) //this function calculates the value of a bit at its position//
+{
+  int num;
+  num = binbit*2^(8-count);
+  counter++;
+  return num;
+}
+void calcposition(float r1, float r2, float r2, float x2, float y2, float x3, float y3) 
+/*
+ x1 and y1 are defined as 0 as a reference and to keep the computation as easy as possible. This function computates the points, where two circels meet and compares them,
+ if the coordinates are identical, all circels have that point in common.This point has to be the origin of the signal, because the radii are the distances between the 
+ origin of the signal and the antennas. The x-value is calculated with the y-value and the y-value is calculated with the a-b-c-formula.
+*/
+{
+  float a1;
+  float a2;
+  float b1;
+  float b2;
+  float c1;
+  float c2;
+  float sy1;
+  float sy2;
+  float sy3;
+  float sy4;
+  float solutiony;
+  float sotutionx;
+  c1=(2*r2^2*y2^2+2*y2^2*x2^2-2*r1^2*r2^2-2*r2^2*y2^2+r1^4+r2^4+y2^4+x2^2)/(4*x2^2)-r1^2; //calculation of everything, that has no relation to y//
+  c2=(2*r3^2*y3^2+2*y3^2*x3^2-2*r1^2*r3^2-2*r3^2*y3^2+r1^4+r3^4+y3^4+x3^2)/(4*x3^2)-r1^2;
+  a1=(-4*x2^2-4*y2^2)/(4*x2^2); //claculation of the factor before y^2//
+  a2=(-4*x3^2-4*y3^2)/(4*x3^2);
+  b1=(-4*y2*r2^2+4*y2*r1^2+4*y2*x2^2+4*y2^3)/(4*x2^2); //calculation of everything before y//
+  b2=(-4*y3*r3^2+4*y3*r1^2+4*y3*x3^2+4*y3^3)/(4*x3^2);
+  sy1=(-b1+sqrt(b1^2-4*a1*c1))/(2*a1); //calculation of all posible values for y//
+  sy2=(-b1-sqrt(b1^2-4*a1*c1))/(2*a1);
+  sy3=(-b2+sqrt(b2^2-4*a2*c2))/(2*a2);
+  sy4=(-b2-sqrt(b2^2-4*a2*c2))/(2*a2);
+  if(sy1==sy3) //comparing x- and y-coordinates of the meetingpoints//
+  {
+    if((r1^2-r2^2-2*sy1*y2+x2^2+y2^2)/(2*x2)==(r1^2-r3^2-2*sy3*y3+x3^2+y3^2)/(2*x3))
+    {
+      solutiony=sy3; 
+      solutionx=(r1^2-r2^2-2*solutiony*y2+x2^2+y2^2)/(2*x2);
+    }
+  }
+  if(sy1==sy4)
+  {
+    if((r1^2-r2^2-2*sy1*y2+x2^2+y2^2)/(2*x2)==(r1^2-r3^2-2*sy4*y3+x3^2+y3^2)/(2*x3))
+    {
+      solutiony=sy4; 
+      solutionx=(r1^2-r2^2-2*solutiony*y2+x2^2+y2^2)/(2*x2);
+    }
+  }
+  if(sy2==sy3)
+  {
+    if((r1^2-r2^2-2*sy2*y2+x2^2+y2^2)/(2*x2)==(r1^2-r3^2-2*sy3*y3+x3^2+y3^2)/(2*x3))
+    {
+      solutiony=sy3; 
+      solutionx=(r1^2-r2^2-2*solutiony*y2+x2^2+y2^2)/(2*x2);
+    }
+  }
+  if(sy2==sy4)
+  {
+    if((r1^2-r2^2-2*sy2*y2+x2^2+y2^2)/(2*x2)==(r1^2-r3^2-2*sy4*y3+x3^2+y3^2)/(2*x3))
+    {
+      solutiony=sy4; 
+      solutionx=(r1^2-r2^2-2*solutiony*y2+x2^2+y2^2)/(2*x2);
+    }
+  }
+  ycoord[index]=solutiony;
+  xcoord[index]=solutionx;
+}
+void calcantposit(float leng1, float leng2, float leng3)
+//this function calculates the coordinates of the two other antennas with 1 beeing at 0/0 and 2 beeing left and 3 beeing right//
+{
+  float alpha; //the angle at antenna 1//
+  float beta; //the angle at antenna 3//
+  float gamma; //the angle at antenna 2//
+  alpha = asin(leng2/leng3);
+  beta = asin(leng1/leng3);
+  gamma = asin(leng2/leng3);
+  anty2= -leng1*sin(0.5*(pi-alpha));
+  antx2= sqrt(leng1^2-anty2^2);
+  anty3= leng2*sin(0.5*(pi-alpha));
+  antx3= sqrt(leng2^2-anty3^2);
+}
